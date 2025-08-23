@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "gold-currency-tracker-59f44",
+  "private_key_id": "dabc1bec1bbbda94ce91767fcc522356804045f3",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCPDGxE0HwleeNz\nOzf8SAMV4kyWTXaChymvQFhnq8YdPGwb+RRcYOw3BDxXJ169FzSozzULOZ6pGSMI\nCQYYAvSvGr1JnGFU9NF0gjgdt6rJO6yl2z+YxCcyFY8O7mPDeNZOcR28p8Ol4ulE\nf5hJjUANArfvMEHoXYqMGT+rvLPBien83JMu4jK6mlaT4SuyGTwUsabE1vBaa6HI\nWUllxUctxM5J+gLVACF6dUtl2sJmvYQrMiS5atfn/8FAreSZQaoznFg3BtaFMP3X\nq3Ls3gDwNe/ctLn5u3E8KAYB5JNhTr8C55wsXL9i23v/Z2OozRZOBJB/1BKoYomN\nzMDs9ivHAgMBAAECggEAD4G46YtxhHJ+czWz2kzyy1guazYB0cvV0KH4s2GjO/TF\nLLxx4O2/eDClBeGbsIMnzzY0ZCoehpWAqan+F3OX6LTNA4Id6aK8Yz/hK2ox66yP\nXk9dHodXpGNCkHYhKcXF8teU8f18WlWLFJosUlTV4P3ZczwCTlki4BBgnuekKNJL\n8p4Mbby4rOfo79aXJu0/j7hXP5SA///5hEHodbl6T46OqDQJnh20qpXEJi1asVu7\nXBrlwKTU2KBRS+UksBVaf5xwksncMrTlDl5JReJVw2MZYmU7Sn+HLx4XNralBC+G\ntu3I1Io6I4w0UhkEjO14wwy65TwZPZqc/MM7tm5zcQKBgQDHZeCsEx4/9rZKWExu\nUb0dW/XaOg/3tmUjAxeHKqzkBznvtarX1Y2LrGRSVVBmSVGGepmngYkgUarInB9K\nWQt/0Z4IKJ/CVIQsqzmu21wejBtP+Gi6fNkihMo24B1WDCMZPrcrTv0kpRkVHdyJ\nCdhahuFYNKG89PqDRFe2z+knHwKBgQC3p6sEGYzG4HT7zFLw/rdjsUcrQVYOA9Rg\neCPcQsjrFTb2Nug/kWMWE6UhtqDvHABOde86m3i7PwnwQ15bBsJj6CncDbC7yhsg\nc6LMK4OmlYMVmSGMf/1PBG8bDSXQwVyxoRkKDAxBrzmk7uxHjgHNF3PRlcm1vjjP\nbdsepCAuWQKBgQCFBCJfyBUq6GLsr4C1K1P0LO+SF5+lSQio1ZwxcDeLmoJ8tXz1\npKFbJrJ59i2/PnPjORAdnR0j8TbzwqphB4vTRbudh7QjiAvwXH0Ld4w5WI+zxmve\n1ABptZnMB6+qQkh7w8mfW38lnflgi94dkPLCWS4kkF/A1M/1F3dIHeRUUwKBgQCn\nckb5mPYCydm/Tn783bCFQ7g41vxIEPPM9Rz1ESsxM4mGGW/NrZgjI8w2ndXDzMr2\nvo5c6C2+w24jUrkv00zfXGj2CsFtporvHp96+d2xv7XhtlmhSXzCU6+dgXJOEE6c\nYd57i5qNNN8g4vopD2/S96QQnjpn60TO00GqgUgaGQKBgG9eYMbjAQMlXyylvadp\nPoSNI6u+dWrFcJR4UbdBM0P1FtaXkIWI41dRikfU3Q2SUHjdhjn2qc0gSSpcbVU8\nMwvqa4xOqzsuJ1c2lEFKi+i1tSULIsXkM2xUM0vNHWdA80tPWCYI2wu+5UMVhfZY\npSPD2K9jvD3gG71nWBISqU88\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@gold-currency-tracker-59f44.iam.gserviceaccount.com",
+  "client_id": "107038009820831836498",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40gold-currency-tracker-59f44.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
