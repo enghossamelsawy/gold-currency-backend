@@ -2,6 +2,7 @@ const GoldPrice = require('../models/GoldPrice');
 const CurrencyRate = require('../models/CurrencyRate');
 const goldService = require('./goldService');
 const currencyService = require('./currencyService');
+const notificationService = require('./notificationService');
 
 class DataCollector {
   async collectGoldPrices() {
@@ -36,6 +37,7 @@ class DataCollector {
         });
         
         await newPrice.save();
+        await notificationService.notifyGoldPriceUpdate(newPrice);
         console.log(`✅ Saved gold price for ${priceData.country}: ${priceData.price_per_gram} ${priceData.currency}`);
       }
       
@@ -86,6 +88,7 @@ class DataCollector {
         });
         
         await newRate.save();
+        await notificationService.notifyCurrencyRateUpdate(newRate);
         console.log(`✅ Saved rate ${pair.from}/${pair.to}: ${pair.rate}`);
       }
       

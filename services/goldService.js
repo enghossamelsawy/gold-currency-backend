@@ -6,7 +6,7 @@ const cheerio = require('cheerio');
 
 class GoldService {
   constructor() {
-    this.baseUrl = 'https://goldpricenow.live';
+    this.baseUrl = 'https://goldpricenow.live/';
     
     // Cache to reduce scraping frequency
     this.cache = {
@@ -28,8 +28,8 @@ class GoldService {
   }
 
   // Check if cache is valid
-  isCacheValid(country) {
-    if (!this.cache.data[country] || !this.cache.timestamp) return false;
+  isCacheValid(key = 'global') {
+    if (!this.cache.data[key] || !this.cache.timestamp) return false;
     return (Date.now() - this.cache.timestamp) < this.cache.ttl;
   }
 
@@ -37,35 +37,16 @@ class GoldService {
   async scrapeGoldPrices(country = 'egypt') {
     try {
       // Check cache first
-      if (this.isCacheValid(country)) {
+      const cacheKey = 'global';
+
+      if (this.isCacheValid(cacheKey)) {
         console.log(`Using cached prices for ${country}`);
-        return this.cache.data[country];
+        return this.cache.data[cacheKey];
       }
 
       console.log(`Scraping gold prices from goldpricenow.live for ${country}...`);
       
-      // Build URL based on country
-      const countryUrls = {
-        'egypt': '/egypt/',
-        'saudi': '/saudi-arabia/',
-        'uae': '/uae/',
-        'kuwait': '/kuwait/',
-        'qatar': '/qatar/',
-        'bahrain': '/bahrain/',
-        'oman': '/oman/',
-        'jordan': '/jordan/',
-        'iraq': '/iraq/',
-        'usa': '/usa/',
-        'uk': '/uk/',
-        'germany': '/germany/',
-        'france': '/france/',
-        'india': '/india/',
-        'pakistan': '/pakistan/',
-        'turkey': '/turkey/'
-      };
-      
-      const path = countryUrls[country.toLowerCase()] || '/egypt/';
-      const url = this.baseUrl + path;
+      const url = this.baseUrl;
       
       console.log(`Fetching from: ${url}`);
       
@@ -81,7 +62,7 @@ class GoldService {
       const prices = await this.extractPricesFromHTML($, country);
       
       // Cache the result
-      this.cache.data[country] = prices;
+      this.cache.data[cacheKey] = prices;
       this.cache.timestamp = Date.now();
       
       return prices;
@@ -131,45 +112,48 @@ class GoldService {
         });
       });
       
-      // Method 2: Look for divs/spans with price information
+      // Method 2: Look for new card layout on goldpricenow.live homepage
       if (Object.keys(prices).length === 0) {
-        // Common selectors for gold price websites
-        const selectors = [
-          '.gold-price',
-          '.price-row',
-          '.karat-price',
-          '[class*="gold"]',
-          '[class*="price"]',
-          '[class*="karat"]',
-          '.table-responsive tr',
-          '.price-table tr'
-        ];
-        
-        for (const selector of selectors) {
-          $(selector).each((i, elem) => {
-            const text = $(elem).text();
-            
-            // Look for karat and price patterns
-            const karatMatch = text.match(/(\d+)\s*(k|K|karat|Karat|عيار)/);
-            const priceMatches = text.match(/[\d,]+\.?\d*/g);
-            
-            if (karatMatch && priceMatches && priceMatches.length >= 2) {
-              const karat = parseInt(karatMatch[1]);
-              const buyPrice = this.extractNumber(priceMatches[0]);
-              const sellPrice = this.extractNumber(priceMatches[1]);
-              
-              if (!prices[karat] && buyPrice > 100) {
-                prices[karat] = {
-                  karat: karat,
-                  buy: buyPrice,
-                  sell: sellPrice
-                };
-              }
-            }
-          });
-        }
+        $('a[href*="kerat-"]').each((i, anchor) => {
+          const card = $(anchor);
+          const text = card.text();
+
+          const karatMatch = text.match(/عيار\s*(\d+)/);
+          let karat = karatMatch ? parseInt(karatMatch[1], 10) : null;
+
+          if (!karat) {
+            const hrefMatch = card.attr('href')?.match(/kerat-(\d+)/);
+            karat = hrefMatch ? parseInt(hrefMatch[1], 10) : null;
+          }
+
+          if (!karat || prices[karat]) {
+            return;
+          }
+
+          const numericMatches = (text.match(/[\d,]+\.?\d*/g) || [])
+            .map(value => this.extractNumber(value))
+            .filter(value => value > 0 && value !== karat);
+
+          if (numericMatches.length === 0) {
+            return;
+          }
+
+          const sellPrice = numericMatches[0];
+          const buyPrice = numericMatches.length > 1
+            ? Math.min(numericMatches[0], numericMatches[1])
+            : Math.round(sellPrice * 0.98 * 100) / 100;
+
+          const normalizedSell = Math.max(sellPrice, buyPrice);
+          const normalizedBuy = Math.min(buyPrice, normalizedSell);
+
+          prices[karat] = {
+            karat,
+            buy: normalizedBuy,
+            sell: normalizedSell
+          };
+        });
       }
-      
+
       // Method 3: Look for specific karat patterns in the whole page
       if (Object.keys(prices).length === 0) {
         const pageText = $('body').text();
@@ -444,7 +428,7 @@ class GoldService {
 
   // Get all gold prices for multiple countries
   async getAllGoldPrices() {
-    const countries = ['egypt', 'saudi', 'uae'];
+    const countries = ['egypt'];
     const prices = [];
     
     for (const country of countries) {

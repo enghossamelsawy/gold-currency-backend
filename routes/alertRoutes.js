@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const UserAlert = require('../models/UserAlert');
+const notificationService = require('../services/notificationService');
 
 // Register for alerts
 router.post('/register', async (req, res) => {
@@ -99,6 +100,111 @@ router.get('/:userId', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+});
+
+// Trigger a test notification for a registered user
+router.post('/test', async (req, res) => {
+  try {
+    const { userId, title, body, data } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId is required'
+      });
+    }
+
+    if (!notificationService.isFirebaseReady()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase not initialized'
+      });
+    }
+
+    const userAlert = await UserAlert.findOne({ userId });
+
+    if (!userAlert || !userAlert.fcmToken) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found or has no FCM token'
+      });
+    }
+
+    const response = await notificationService.sendNotification(
+      userAlert.fcmToken,
+      title || 'Test Notification',
+      body || 'If you received this, your notifications are working.',
+      typeof data === 'object' && data !== null ? data : {}
+    );
+
+    return res.json({
+      success: true,
+      message: 'Notification dispatched',
+      data: response
+    });
+  } catch (error) {
+    console.error('❌ Error sending test notification:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Send a notification and return the notification ID
+router.post('/notify', async (req, res) => {
+  try {
+    const { userId, fcmToken, title, body, data } = req.body;
+
+    if (!userId && !fcmToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either userId or fcmToken is required'
+      });
+    }
+
+    if (!notificationService.isFirebaseReady()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Firebase not initialized'
+      });
+    }
+
+    let targetToken = fcmToken;
+    let alertDoc = null;
+
+    if (!targetToken && userId) {
+      alertDoc = await UserAlert.findOne({ userId });
+
+      if (!alertDoc || !alertDoc.fcmToken) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found or has no FCM token'
+        });
+      }
+
+      targetToken = alertDoc.fcmToken;
+    }
+
+    const notificationId = await notificationService.sendNotification(
+      targetToken,
+      title || 'Notification',
+      body || 'You have a new notification.',
+      typeof data === 'object' && data !== null ? data : {}
+    );
+
+    return res.json({
+      success: true,
+      message: 'Notification sent successfully',
+      notificationId
+    });
+  } catch (error) {
+    console.error('❌ Error sending notification:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
