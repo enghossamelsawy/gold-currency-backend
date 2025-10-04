@@ -336,6 +336,73 @@ class NotificationService {
     }
   }
 
+  async sendDailyDigest() {
+    if (!this.isFirebaseReady()) {
+      console.log('Firebase not initialized - skipping daily digest');
+      return;
+    }
+
+    try {
+      const [latestGold, latestUsdEgp, latestUsdEur] = await Promise.all([
+        GoldPrice.findOne({ country: 'egypt' }).sort({ timestamp: -1 }),
+        CurrencyRate.findOne({ fromCurrency: 'USD', toCurrency: 'EGP' }).sort({ timestamp: -1 }),
+        CurrencyRate.findOne({ fromCurrency: 'USD', toCurrency: 'EUR' }).sort({ timestamp: -1 })
+      ]);
+
+      const goldSegment = latestGold
+        ? `Gold 24K ${this.formatNumber(latestGold.pricePerGram, 2)} ${latestGold.currency}/g (${latestGold.percentageChange > 0 ? '+' : ''}${this.formatNumber(latestGold.percentageChange || 0, 2)}%)`
+        : null;
+
+      const usdEgpSegment = latestUsdEgp
+        ? `USD/EGP ${this.formatNumber(latestUsdEgp.rate, 2)} (${latestUsdEgp.percentageChange > 0 ? '+' : ''}${this.formatNumber(latestUsdEgp.percentageChange || 0, 2)}%)`
+        : null;
+
+      const usdEurSegment = latestUsdEur
+        ? `USD/EUR ${this.formatNumber(latestUsdEur.rate, 4)} (${latestUsdEur.percentageChange > 0 ? '+' : ''}${this.formatNumber(latestUsdEur.percentageChange || 0, 2)}%)`
+        : null;
+
+      const parts = [goldSegment, usdEgpSegment, usdEurSegment].filter(Boolean);
+      const body = parts.length > 0
+        ? parts.join(' | ')
+        : 'Check the latest gold and currency updates.';
+
+      const dataPayload = {
+        type: 'daily_digest',
+        goldPrice: latestGold?.pricePerGram?.toString() || '',
+        goldCurrency: latestGold?.currency || '',
+        usdEgp: latestUsdEgp?.rate?.toString() || '',
+        usdEur: latestUsdEur?.rate?.toString() || ''
+      };
+
+      const alerts = await UserAlert.find({
+        'notificationSettings.enabled': true,
+        fcmToken: { $ne: null }
+      });
+
+      console.log(`🔊 Sending daily digest to ${alerts.length} users`);
+
+      for (const alert of alerts) {
+        if (this.shouldSkipByInterval(alert)) {
+          continue;
+        }
+
+        try {
+          await this.sendNotification(
+            alert.fcmToken,
+            'Daily Market Update',
+            body,
+            dataPayload
+          );
+          await this.markNotified(alert);
+        } catch (error) {
+          await this.handleSendError(error, alert);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error sending daily digest:', error);
+    }
+  }
+
   checkThreshold(currentValue, threshold, direction) {
     switch (direction) {
       case 'above':

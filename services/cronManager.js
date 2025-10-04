@@ -16,19 +16,25 @@ class CronManager {
       await dataCollector.collectAllData();
       await notificationService.checkAndSendAlerts();
     });
-    
+
     // Daily cleanup at midnight
     const cleanupJob = cron.schedule('0 0 * * *', async () => {
       console.log('🧹 Running daily cleanup...');
       await dataCollector.cleanOldRecords('gold');
       await dataCollector.cleanOldRecords('currency');
     });
-    
-    this.jobs.push(dataJob, cleanupJob);
-    
+
+    // Daily digest at 9:00 AM UTC
+    const dailyDigestJob = cron.schedule('0 9 * * *', async () => {
+      console.log('📢 Sending daily digest notifications...');
+      await notificationService.sendDailyDigest();
+    });
+
+    this.jobs.push(dataJob, cleanupJob, dailyDigestJob);
+
     // Run initial data collection
     dataCollector.collectAllData();
-    
+
     console.log('✅ Cron jobs started successfully');
   }
   
