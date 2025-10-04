@@ -44,28 +44,7 @@ class GoldService {
 
       console.log(`Scraping gold prices from goldpricenow.live for ${country}...`);
       
-      // Build URL based on country
-      const countryUrls = {
-        'egypt': '/',
-        'saudi': '/saudi-arabia/',
-        'uae': '/uae/',
-        'kuwait': '/kuwait/',
-        'qatar': '/qatar/',
-        'bahrain': '/bahrain/',
-        'oman': '/oman/',
-        'jordan': '/jordan/',
-        'iraq': '/iraq/',
-        'usa': '/usa/',
-        'uk': '/uk/',
-        'germany': '/germany/',
-        'france': '/france/',
-        'india': '/india/',
-        'pakistan': '/pakistan/',
-        'turkey': '/turkey/'
-      };
-      
-      const path = countryUrls[country.toLowerCase()] || '/';
-      const url = this.baseUrl + path;
+      const url = this.baseUrl;
       
       console.log(`Fetching from: ${url}`);
       
