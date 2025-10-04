@@ -46,7 +46,7 @@ class GoldService {
       
       // Build URL based on country
       const countryUrls = {
-        'egypt': '/egypt/',
+        'egypt': '/',
         'saudi': '/saudi-arabia/',
         'uae': '/uae/',
         'kuwait': '/kuwait/',
@@ -64,7 +64,7 @@ class GoldService {
         'turkey': '/turkey/'
       };
       
-      const path = countryUrls[country.toLowerCase()] || '/egypt/';
+      const path = countryUrls[country.toLowerCase()] || '/';
       const url = this.baseUrl + path;
       
       console.log(`Fetching from: ${url}`);
