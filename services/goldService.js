@@ -7,14 +7,14 @@ const cheerio = require('cheerio');
 class GoldService {
   constructor() {
     this.baseUrl = 'https://goldpricenow.live/';
-    
+
     // Cache to reduce scraping frequency
     this.cache = {
       data: {},
       timestamp: null,
       ttl: 5 * 60 * 1000 // 5 minutes cache
     };
-    
+
     // Headers to avoid being blocked
     this.headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -33,6 +33,62 @@ class GoldService {
     return (Date.now() - this.cache.timestamp) < this.cache.ttl;
   }
 
+  // Scrape gold prices from BankLive (Reliable source for Egypt)
+  async scrapeBankLiveGold(country = 'egypt') {
+    try {
+      console.log(`Scraping gold prices from banklive.net for ${country}...`);
+      const url = 'https://banklive.net/en/gold-price-today-in-egypt';
+
+      const response = await axios.get(url, {
+        headers: this.headers,
+        timeout: 15000
+      });
+
+      const $ = cheerio.load(response.data);
+      const prices = {};
+
+      $('tr').each((i, row) => {
+        const cells = $(row).find('td');
+        if (cells.length >= 3) {
+          const nameColumn = $(cells[0]).text().trim();
+          const buyColumn = $(cells[1]).find('.rate').text().trim() || $(cells[1]).text().trim();
+          const sellColumn = $(cells[2]).find('.rate').text().trim() || $(cells[2]).text().trim();
+
+          const karatMatch = nameColumn.match(/(\d+)\s*Karat/);
+          if (karatMatch) {
+            const karat = parseInt(karatMatch[1]);
+            const buy = parseFloat(buyColumn.replace(/,/g, ''));
+            const sell = parseFloat(sellColumn.replace(/,/g, ''));
+
+            if (!isNaN(buy) && !isNaN(sell)) {
+              prices[karat] = {
+                karat: karat,
+                buy: buy,
+                sell: sell
+              };
+              console.log(`Found ${karat}k on BankLive: Buy=${buy}, Sell=${sell}`);
+            }
+          }
+        }
+      });
+
+      if (Object.keys(prices).length === 0) return null;
+
+      const priceArray = Object.values(prices).sort((a, b) => b.karat - a.karat);
+
+      return {
+        country: country,
+        prices: priceArray,
+        currency: 'EGP',
+        timestamp: new Date().toISOString(),
+        source: 'banklive.net'
+      };
+    } catch (error) {
+      console.error(`Error scraping BankLive for ${country}:`, error.message);
+      return null;
+    }
+  }
+
   // Main scraping function
   async scrapeGoldPrices(country = 'egypt') {
     try {
@@ -44,32 +100,42 @@ class GoldService {
         return this.cache.data[cacheKey];
       }
 
+      // Try BankLive first for Egypt
+      if (country.toLowerCase() === 'egypt') {
+        const bankLivePrices = await this.scrapeBankLiveGold(country);
+        if (bankLivePrices) {
+          this.cache.data[cacheKey] = bankLivePrices;
+          this.cache.timestamp = Date.now();
+          return bankLivePrices;
+        }
+      }
+
       console.log(`Scraping gold prices from goldpricenow.live for ${country}...`);
-      
+
       const url = this.baseUrl;
-      
+
       console.log(`Fetching from: ${url}`);
-      
+
       const response = await axios.get(url, {
         headers: this.headers,
         timeout: 15000,
         maxRedirects: 5
       });
-      
+
       const $ = cheerio.load(response.data);
-      
+
       // Extract prices - the site structure may vary by country
       const prices = await this.extractPricesFromHTML($, country);
-      
+
       // Cache the result
       this.cache.data[cacheKey] = prices;
       this.cache.timestamp = Date.now();
-      
+
       return prices;
-      
+
     } catch (error) {
       console.error(`Error scraping prices for ${country}:`, error.message);
-      
+
       // Try alternative scraping method or return fallback
       return this.getFallbackPrices(country);
     }
@@ -78,7 +144,7 @@ class GoldService {
   // Extract prices from HTML
   async extractPricesFromHTML($, country) {
     const prices = {};
-    
+
     try {
       // Method 1: Look for table with gold prices
       $('table').each((index, table) => {
@@ -86,19 +152,19 @@ class GoldService {
           const cells = $(row).find('td');
           if (cells.length >= 3) {
             const firstCell = $(cells[0]).text().trim();
-            
+
             // Check if this row contains karat information
             const karatMatch = firstCell.match(/(\d+)\s*(k|K|karat|Karat|عيار)/);
             if (karatMatch) {
               const karat = parseInt(karatMatch[1]);
-              
+
               // Extract buy and sell prices
               const buyText = $(cells[1]).text().trim();
               const sellText = $(cells[2]).text().trim();
-              
+
               const buyPrice = this.extractNumber(buyText);
               const sellPrice = this.extractNumber(sellText);
-              
+
               if (buyPrice > 0 && sellPrice > 0) {
                 prices[karat] = {
                   karat: karat,
@@ -111,7 +177,7 @@ class GoldService {
           }
         });
       });
-      
+
       // Method 2: Look for new card layout on goldpricenow.live homepage
       if (Object.keys(prices).length === 0) {
         $('a[href*="kerat-"]').each((i, anchor) => {
@@ -158,16 +224,16 @@ class GoldService {
       if (Object.keys(prices).length === 0) {
         const pageText = $('body').text();
         const karats = [24, 22, 21, 18, 14, 12, 10, 9];
-        
+
         for (const karat of karats) {
           // Try to find price near karat mention
           const regex = new RegExp(`${karat}\\s*(?:k|K|karat|Karat|عيار)[^\\d]*(\\d+[,.]?\\d*)\\s*[^\\d]*(\\d+[,.]?\\d*)`, 'gi');
           const match = regex.exec(pageText);
-          
+
           if (match) {
             const price1 = this.extractNumber(match[1]);
             const price2 = this.extractNumber(match[2]);
-            
+
             if (price1 > 100 && price2 > 100) {
               prices[karat] = {
                 karat: karat,
@@ -178,19 +244,19 @@ class GoldService {
           }
         }
       }
-      
+
       // If we have some prices, calculate missing ones based on purity
       if (Object.keys(prices).length > 0) {
         this.fillMissingKarats(prices);
       }
-      
+
     } catch (error) {
       console.error('Error extracting prices:', error.message);
     }
-    
+
     // Convert to array format
     const priceArray = Object.values(prices).sort((a, b) => b.karat - a.karat);
-    
+
     return {
       country: country,
       prices: priceArray,
@@ -203,18 +269,18 @@ class GoldService {
   // Extract number from text
   extractNumber(text) {
     if (!text) return 0;
-    
+
     // Remove everything except numbers, dots, and commas
     const cleaned = text.replace(/[^\d.,]/g, '');
-    
+
     // Handle different number formats (1,234.56 or 1.234,56)
     let normalized = cleaned;
-    
+
     // If there's both comma and dot, determine which is decimal separator
     if (cleaned.includes(',') && cleaned.includes('.')) {
       const lastComma = cleaned.lastIndexOf(',');
       const lastDot = cleaned.lastIndexOf('.');
-      
+
       if (lastComma > lastDot) {
         // Comma is decimal separator (European format)
         normalized = cleaned.replace(/\./g, '').replace(',', '.');
@@ -233,7 +299,7 @@ class GoldService {
         normalized = cleaned.replace(',', '.');
       }
     }
-    
+
     const num = parseFloat(normalized);
     return isNaN(num) ? 0 : num;
   }
@@ -250,7 +316,7 @@ class GoldService {
       10: 0.417,
       9: 0.375
     };
-    
+
     // Find base price (usually 24k)
     let basePrice = null;
     if (prices[24]) {
@@ -260,15 +326,15 @@ class GoldService {
     } else if (prices[21]) {
       basePrice = prices[21].sell / purityMap[21];
     }
-    
+
     if (basePrice) {
       const karats = [24, 22, 21, 18, 14, 12];
-      
+
       for (const karat of karats) {
         if (!prices[karat]) {
           const purity = purityMap[karat];
           const calculatedPrice = basePrice * purity;
-          
+
           prices[karat] = {
             karat: karat,
             buy: Math.round(calculatedPrice * 0.98 * 100) / 100, // 2% spread
@@ -300,14 +366,14 @@ class GoldService {
       'pakistan': 'PKR',
       'turkey': 'TRY'
     };
-    
+
     return currencies[country.toLowerCase()] || 'USD';
   }
 
   // Get fallback prices if scraping fails
   getFallbackPrices(country) {
     console.log(`Using fallback prices for ${country}`);
-    
+
     const fallbackData = {
       'egypt': {
         country: 'egypt',
@@ -338,7 +404,7 @@ class GoldService {
         source: 'fallback'
       }
     };
-    
+
     return fallbackData[country.toLowerCase()] || fallbackData['egypt'];
   }
 
@@ -346,10 +412,10 @@ class GoldService {
   async getGoldPrice(country) {
     try {
       const data = await this.scrapeGoldPrices(country);
-      
+
       // Find 24k price
       const price24k = data.prices.find(p => p.karat === 24) || data.prices[0];
-      
+
       return {
         country: country,
         price_per_gram: price24k ? price24k.sell : 5200,
@@ -359,7 +425,7 @@ class GoldService {
       };
     } catch (error) {
       console.error(`Error getting gold price for ${country}:`, error.message);
-      
+
       return {
         country: country,
         price_per_gram: 5200,
@@ -374,7 +440,7 @@ class GoldService {
   async getAllKaratPrices(country = 'egypt') {
     try {
       const data = await this.scrapeGoldPrices(country);
-      
+
       // Generate price changes (you can store historical data for real changes)
       const pricesWithChanges = data.prices.map(price => ({
         karat: price.karat,
@@ -385,10 +451,10 @@ class GoldService {
         percentageChange: Math.round((Math.random() * 2 - 1) * 100) / 100,
         currency: data.currency
       }));
-      
+
       // Find base 24k price
       const base24k = data.prices.find(p => p.karat === 24);
-      
+
       return {
         success: true,
         country: country,
@@ -398,10 +464,10 @@ class GoldService {
         timestamp: data.timestamp,
         source: data.source
       };
-      
+
     } catch (error) {
       console.error(`Error getting karat prices for ${country}:`, error.message);
-      
+
       // Return fallback
       const fallback = this.getFallbackPrices(country);
       const pricesWithChanges = fallback.prices.map(price => ({
@@ -413,7 +479,7 @@ class GoldService {
         percentageChange: 1,
         currency: fallback.currency
       }));
-      
+
       return {
         success: true,
         country: country,
@@ -430,7 +496,7 @@ class GoldService {
   async getAllGoldPrices() {
     const countries = ['egypt'];
     const prices = [];
-    
+
     for (const country of countries) {
       try {
         const price = await this.getGoldPrice(country);
@@ -439,7 +505,7 @@ class GoldService {
         console.error(`Failed to get price for ${country}`);
       }
     }
-    
+
     return prices;
   }
 
@@ -455,7 +521,7 @@ class GoldService {
       10: 0.417,
       9: 0.375
     };
-    
+
     return purityMap[karat] || (karat / 24);
   }
 

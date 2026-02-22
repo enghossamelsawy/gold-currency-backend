@@ -40,6 +40,13 @@ class NotificationService {
         "بشرى سارة، سعر الصرف نزل شوية 🟢",
         "العملة ريحت أخيرًا 👇",
         "فرصة تحويل؟ السعر نزل 📉"
+      ],
+      digestOpener: [
+        "صباح الفل يا مصري! ☀️",
+        "إيه الأخبار في السوق النهاردة؟ 🗞️",
+        "يا صباح الرزق! شوف الأسعار دلوقت 💸",
+        "يا هلا بالناس الحلوة، ده ملخص السوق 🍏",
+        "صباح الورد والياسمين، إليك أسعار اليوم 📝"
       ]
     };
   }
@@ -478,8 +485,9 @@ class NotificationService {
         let title;
 
         if (lang === 'ar') {
+          const opener = this.getRandomMessage('digestOpener');
           const parts = [arGoldSegment, arUsdEgpSegment, arUsdEurSegment].filter(Boolean);
-          body = parts.length > 0 ? parts.join(' | ') : 'تحقق من أحدث أسعار الذهب والعملات.';
+          body = parts.length > 0 ? `${opener}\n\n${parts.join(' | ')}` : 'تحقق من أحدث أسعار الذهب والعملات.';
           title = 'تحديث السوق اليومي';
         } else {
           const parts = [enGoldSegment, enUsdEgpSegment, enUsdEurSegment].filter(Boolean);
