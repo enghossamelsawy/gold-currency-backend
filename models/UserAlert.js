@@ -34,6 +34,11 @@ const userAlertSchema = new mongoose.Schema({
       default: 'any'
     }
   }],
+  language: {
+    type: String,
+    enum: ['en', 'ar'],
+    default: 'en'
+  },
   notificationSettings: {
     enabled: {
       type: Boolean,

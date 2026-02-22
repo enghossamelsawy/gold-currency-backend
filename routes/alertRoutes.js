@@ -6,14 +6,15 @@ const notificationService = require('../services/notificationService');
 // Register for alerts
 router.post('/register', async (req, res) => {
   try {
-    const { userId, fcmToken, goldAlerts, currencyAlerts } = req.body;
-    
+    const { userId, fcmToken, goldAlerts, currencyAlerts, language } = req.body;
+
     // Check if user already exists
     let userAlert = await UserAlert.findOne({ userId });
-    
+
     if (userAlert) {
       // Update existing alert
       userAlert.fcmToken = fcmToken;
+      if (language) userAlert.language = language;
       userAlert.goldAlerts = goldAlerts || userAlert.goldAlerts;
       userAlert.currencyAlerts = currencyAlerts || userAlert.currencyAlerts;
       await userAlert.save();
@@ -22,21 +23,22 @@ router.post('/register', async (req, res) => {
       userAlert = new UserAlert({
         userId,
         fcmToken,
+        language: language || 'en',
         goldAlerts: goldAlerts || [],
         currencyAlerts: currencyAlerts || []
       });
       await userAlert.save();
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Alert registered successfully',
-      data: userAlert 
+      data: userAlert
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -45,36 +47,40 @@ router.post('/register', async (req, res) => {
 router.put('/settings/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { enabled, minInterval } = req.body;
-    
+    const { enabled, minInterval, language } = req.body;
+
     const userAlert = await UserAlert.findOne({ userId });
-    
+
     if (!userAlert) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'User not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
       });
     }
-    
+
     if (enabled !== undefined) {
       userAlert.notificationSettings.enabled = enabled;
     }
-    
+
     if (minInterval !== undefined) {
       userAlert.notificationSettings.minInterval = minInterval;
     }
-    
+
+    if (language !== undefined) {
+      userAlert.language = language;
+    }
+
     await userAlert.save();
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Settings updated',
-      data: userAlert 
+      data: userAlert
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -84,22 +90,22 @@ router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const userAlert = await UserAlert.findOne({ userId });
-    
+
     if (!userAlert) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'User not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
       });
     }
-    
-    res.json({ 
-      success: true, 
-      data: userAlert 
+
+    res.json({
+      success: true,
+      data: userAlert
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

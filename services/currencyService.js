@@ -12,7 +12,7 @@ class CurrencyService {
       timestamp: null,
       ttl: 60 * 60 * 1000 // 1 hour cache
     };
-    
+
     // Headers
     this.headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -51,96 +51,53 @@ class CurrencyService {
     return (Date.now() - this.cache.timestamp) < this.cache.ttl;
   }
 
-  // Try to scrape NBE website for live rates
-  async scrapeNBEWebsite() {
+  // Scrape BankLive for live rates
+  async scrapeBankLiveWebsite() {
     try {
-      console.log('Attempting to scrape NBE website for live rates...');
-      
-      // NBE uses JavaScript to load data, so direct scraping might not work
-      // We could try their API endpoints if available
-      const apiUrl = 'https://nbe.com.eg/NBE/ExchangeRatesServlet';
-      
-      try {
-        const response = await axios.get(apiUrl, {
-          headers: {
-            ...this.headers,
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          timeout: 10000
-        });
-        
-        if (response.data) {
-          // Parse the response if it's JSON
-          return this.parseNBEData(response.data);
-        }
-      } catch (err) {
-        console.log('NBE API not accessible, using hardcoded rates');
-      }
-      
-      // Return null to use fallback
-      return null;
-      
-    } catch (error) {
-      console.error('NBE scraping failed:', error.message);
-      return null;
-    }
-  }
+      console.log('Attempting to scrape BankLive for live rates...');
+      const url = 'https://banklive.net/en/currency-exchange-rates-in-central-bank-of-egypt';
 
-  // Parse NBE data if we get it
-  parseNBEData(data) {
-    try {
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': this.headers['User-Agent'],
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+        },
+        timeout: 10000
+      });
+
+      const $ = cheerio.load(response.data);
       const rates = {};
-      
-      // If it's JSON data
-      if (typeof data === 'object' && data.currencies) {
-        data.currencies.forEach(currency => {
-          rates[currency.code] = {
-            buy: parseFloat(currency.buyRate),
-            sell: parseFloat(currency.sellRate),
-            mid: (parseFloat(currency.buyRate) + parseFloat(currency.sellRate)) / 2
-          };
-        });
+
+      $('tr').each((i, row) => {
+        const cells = $(row).find('td');
+        if (cells.length >= 3) {
+          // banklive puts the code, a newline, and the currency name
+          const currencyStr = $(cells[0]).text().trim();
+          const currCode = currencyStr.substring(0, 3).toUpperCase();
+
+          const buyStr = $(cells[1]).text().trim();
+          const sellStr = $(cells[2]).text().trim();
+
+          const buy = parseFloat(buyStr);
+          const sell = parseFloat(sellStr);
+
+          if (currCode && !isNaN(buy) && !isNaN(sell) && currCode.length === 3 && currCode !== 'EGY') {
+            rates[currCode] = {
+              buy: buy,
+              sell: sell,
+              mid: (buy + sell) / 2
+            };
+          }
+        }
+      });
+
+      if (Object.keys(rates).length > 0) {
         return rates;
       }
-      
-      // If it's HTML, try to parse it
-      if (typeof data === 'string') {
-        const $ = cheerio.load(data);
-        
-        // Look for currency data in tables
-        $('tr').each((i, row) => {
-          const cells = $(row).find('td');
-          if (cells.length >= 3) {
-            const currencyText = $(cells[0]).text().trim();
-            const buyText = $(cells[1]).text().trim();
-            const sellText = $(cells[2]).text().trim();
-            
-            // Match currency codes
-            const currencyMatch = currencyText.match(/(USD|EUR|GBP|SAR|AED|KWD)/i);
-            if (currencyMatch) {
-              const currency = currencyMatch[1].toUpperCase();
-              const buy = parseFloat(buyText.replace(',', '.'));
-              const sell = parseFloat(sellText.replace(',', '.'));
-              
-              if (!isNaN(buy) && !isNaN(sell)) {
-                rates[currency] = {
-                  buy: buy,
-                  sell: sell,
-                  mid: (buy + sell) / 2
-                };
-              }
-            }
-          }
-        });
-        
-        if (Object.keys(rates).length > 0) {
-          return rates;
-        }
-      }
-      
       return null;
     } catch (error) {
-      console.error('Error parsing NBE data:', error);
+      console.error('BankLive scraping failed:', error.message);
       return null;
     }
   }
@@ -153,16 +110,16 @@ class CurrencyService {
         console.log('Using cached currency rates');
         return this.cache.data;
       }
-      
-      // Try to get live rates from NBE
-      let rates = await this.scrapeNBEWebsite();
-      
+
+      // Try to get live rates from BankLive
+      let rates = await this.scrapeBankLiveWebsite();
+
       // If scraping failed or returned no data, use our updated official rates
       if (!rates || Object.keys(rates).length === 0) {
-        console.log('Using updated official NBE rates');
+        console.log('Using updated official fallback rates');
         rates = this.officialRates;
       }
-      
+
       // Format the response
       const formattedRates = {};
       for (const [currency, rate] of Object.entries(rates)) {
@@ -173,25 +130,25 @@ class CurrencyService {
           mid: rate.mid || (rate.buy + rate.sell) / 2
         };
       }
-      
+
       const data = {
         base: 'EGP',
         date: new Date().toLocaleDateString(),
         timestamp: new Date().toISOString(),
         rates: formattedRates,
-        source: 'National Bank of Egypt (NBE)',
-        lastUpdate: 'Rates as shown on NBE website'
+        source: 'Central Bank of Egypt (BankLive)',
+        lastUpdate: 'Rates as shown on BankLive website'
       };
-      
+
       // Cache the result
       this.cache.data = data;
       this.cache.timestamp = Date.now();
-      
+
       return data;
-      
+
     } catch (error) {
       console.error('Error getting rates:', error.message);
-      
+
       // Return official rates as fallback
       const formattedRates = {};
       for (const [currency, rate] of Object.entries(this.officialRates)) {
@@ -202,14 +159,14 @@ class CurrencyService {
           mid: rate.mid
         };
       }
-      
+
       return {
         base: 'EGP',
         date: new Date().toLocaleDateString(),
         timestamp: new Date().toISOString(),
         rates: formattedRates,
-        source: 'NBE (hardcoded current rates)',
-        lastUpdate: 'Updated with actual NBE rates'
+        source: 'Fallback Current Rates',
+        lastUpdate: 'Updated with offline rates'
       };
     }
   }
@@ -218,7 +175,7 @@ class CurrencyService {
   async getExchangeRate(fromCurrency, toCurrency) {
     try {
       const data = await this.getAllRates();
-      
+
       if (fromCurrency === 'EGP' && toCurrency === 'EGP') {
         return {
           from: 'EGP',
@@ -227,11 +184,11 @@ class CurrencyService {
           timestamp: data.timestamp
         };
       }
-      
+
       // Handle JPY special case (usually quoted per 100)
       let adjustmentFactor = 1;
       if (fromCurrency === 'JPY') adjustmentFactor = 100;
-      
+
       // From foreign currency to EGP
       if (toCurrency === 'EGP' && data.rates[fromCurrency]) {
         return {
@@ -243,12 +200,12 @@ class CurrencyService {
           timestamp: data.timestamp
         };
       }
-      
+
       // From EGP to foreign currency
       if (fromCurrency === 'EGP' && data.rates[toCurrency]) {
         const rate = data.rates[toCurrency];
         const adjustFactor = toCurrency === 'JPY' ? 100 : 1;
-        
+
         return {
           from: fromCurrency,
           to: toCurrency,
@@ -258,16 +215,16 @@ class CurrencyService {
           timestamp: data.timestamp
         };
       }
-      
+
       // Cross rates (e.g., USD to EUR)
       if (data.rates[fromCurrency] && data.rates[toCurrency]) {
         const fromAdjust = fromCurrency === 'JPY' ? 100 : 1;
         const toAdjust = toCurrency === 'JPY' ? 100 : 1;
-        
+
         const fromToEGP = data.rates[fromCurrency].mid / fromAdjust;
         const toToEGP = data.rates[toCurrency].mid / toAdjust;
         const crossRate = fromToEGP / toToEGP;
-        
+
         return {
           from: fromCurrency,
           to: toCurrency,
@@ -275,9 +232,9 @@ class CurrencyService {
           timestamp: data.timestamp
         };
       }
-      
+
       throw new Error(`Cannot find exchange rate for ${fromCurrency}/${toCurrency}`);
-      
+
     } catch (error) {
       console.error('Error getting exchange rate:', error.message);
       return {
@@ -294,17 +251,17 @@ class CurrencyService {
   async getMultipleRates() {
     try {
       const data = await this.getAllRates();
-      
+
       const usdRate = data.rates.USD ? data.rates.USD.mid : 48.42;
       const eurRate = data.rates.EUR ? data.rates.EUR.mid : 56.47;
-      
+
       return {
         USD_EUR: Math.round((usdRate / eurRate) * 10000) / 10000,
         USD_EGP: usdRate,
         EUR_EGP: eurRate,
         timestamp: data.timestamp
       };
-      
+
     } catch (error) {
       console.error('Error getting multiple rates:', error.message);
       return {
@@ -320,7 +277,7 @@ class CurrencyService {
   async getAllCurrencyRates() {
     try {
       const data = await this.getAllRates();
-      
+
       const currencyInfo = {
         USD: { name: 'الدولار الأمريكي', flag: '🇺🇸', nameEn: 'US Dollar' },
         EUR: { name: 'اليورو', flag: '🇪🇺', nameEn: 'Euro' },
@@ -338,17 +295,17 @@ class CurrencyService {
         CAD: { name: 'الدولار الكندي', flag: '🇨🇦', nameEn: 'Canadian Dollar' },
         AUD: { name: 'الدولار الأسترالي', flag: '🇦🇺', nameEn: 'Australian Dollar' }
       };
-      
+
       const formattedRates = [];
-      
+
       for (const [code, rate] of Object.entries(data.rates)) {
         const info = currencyInfo[code] || { name: code, nameEn: code, flag: '💱' };
-        
+
         // Adjust for JPY (displayed per 100)
-        const displayRate = code === 'JPY' ? 
-          { buy: rate.buy / 100, sell: rate.sell / 100, mid: rate.mid / 100 } : 
+        const displayRate = code === 'JPY' ?
+          { buy: rate.buy / 100, sell: rate.sell / 100, mid: rate.mid / 100 } :
           rate;
-        
+
         formattedRates.push({
           code: code,
           name: info.name,
@@ -361,13 +318,13 @@ class CurrencyService {
           spreadPercent: Math.round(((displayRate.sell - displayRate.buy) / displayRate.mid) * 10000) / 100
         });
       }
-      
+
       // Sort by importance (major currencies first)
       const sortOrder = ['USD', 'EUR', 'GBP', 'SAR', 'AED', 'KWD', 'CHF', 'JPY'];
       formattedRates.sort((a, b) => {
         const aIndex = sortOrder.indexOf(a.code);
         const bIndex = sortOrder.indexOf(b.code);
-        
+
         if (aIndex !== -1 && bIndex !== -1) {
           return aIndex - bIndex;
         }
@@ -375,7 +332,7 @@ class CurrencyService {
         if (bIndex !== -1) return 1;
         return a.code.localeCompare(b.code);
       });
-      
+
       return {
         base: 'EGP',
         date: data.date,
@@ -383,7 +340,7 @@ class CurrencyService {
         source: data.source,
         rates: formattedRates
       };
-      
+
     } catch (error) {
       console.error('Error getting all currency rates:', error.message);
       return {
@@ -406,11 +363,11 @@ class CurrencyService {
     console.log('Currency cache cleared');
   }
 
-  // Manually update rates when you get fresh data from NBE
+  // Manually update rates when you get fresh offline data
   updateOfficialRates(newRates) {
     this.officialRates = { ...this.officialRates, ...newRates };
     this.clearCache();
-    console.log('Official rates updated with new NBE data');
+    console.log('Official rates updated with offline data');
   }
 }
 

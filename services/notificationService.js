@@ -15,7 +15,40 @@ try {
 }
 
 class NotificationService {
-  constructor() {}
+  constructor() {
+    this.arabicMessages = {
+      goldUp: [
+        "الدهب ولع يا معلم! 🔥",
+        "فرصة للبيع؟ الدهب رفع! 💰",
+        "الدهب طار لفوق 🚀 الحق الظرف",
+        "يا تلحق يا متلحقش، الدهب بيزيد 📈"
+      ],
+      goldDown: [
+        "يا بلاش! الدهب نزل، دي فرصة تشتري 🛒",
+        "الحق اشتري، الدهب ريح شوية 👇",
+        "الدهب هدي، يمكن الوقت مناسب للشراء؟ 🤔",
+        "فرصة ذهبية! السعر نزل 📉"
+      ],
+      currUp: [
+        "أوبا! العملة رفعت تاني 📈",
+        "الدولار طار لفوق! 🚀",
+        "سعر الصرف في العالي، خد بالك 💸",
+        "يا ساتر! العملة شدت حيلها 💹"
+      ],
+      currDown: [
+        "الجنيه بيرد! العملة نزلت 📉",
+        "بشرى سارة، سعر الصرف نزل شوية 🟢",
+        "العملة ريحت أخيرًا 👇",
+        "فرصة تحويل؟ السعر نزل 📉"
+      ]
+    };
+  }
+
+  getRandomMessage(category) {
+    const msgs = this.arabicMessages[category];
+    if (!msgs) return "";
+    return msgs[Math.floor(Math.random() * msgs.length)];
+  }
 
   isFirebaseReady() {
     return admin.apps.length > 0;
@@ -81,7 +114,7 @@ class NotificationService {
       console.log('Firebase not initialized - skipping notification');
       return;
     }
-    
+
     try {
       const message = {
         notification: {
@@ -94,7 +127,7 @@ class NotificationService {
         },
         token: fcmToken
       };
-      
+
       const response = await admin.messaging().send(message);
       console.log('✅ Notification sent:', response);
       return response;
@@ -106,7 +139,7 @@ class NotificationService {
 
   async checkAndSendAlerts() {
     console.log('🔔 Checking for alerts...');
-    
+
     try {
       if (!this.isFirebaseReady()) {
         console.log('Firebase not initialized - skipping alert checks');
@@ -127,23 +160,37 @@ class NotificationService {
             break;
           }
 
-          const latestPrice = await GoldPrice.findOne({ 
-            country: goldAlert.country 
+          const latestPrice = await GoldPrice.findOne({
+            country: goldAlert.country
           }).sort({ timestamp: -1 });
-          
+
           if (latestPrice && latestPrice.priceChange !== 0) {
             const shouldAlert = this.checkThreshold(
               latestPrice.pricePerGram,
               goldAlert.threshold,
               goldAlert.direction
             );
-            
+
             if (shouldAlert) {
               try {
+                const lang = alert.language === 'ar' ? 'ar' : 'en';
+                const isUp = latestPrice.priceChange > 0;
+                const title = lang === 'ar'
+                  ? `تنبيه سعر الذهب - ${goldAlert.country}`
+                  : `Gold Price Alert - ${goldAlert.country}`;
+                let body = lang === 'ar'
+                  ? `سعر الذهب في ${goldAlert.country} الآن ${latestPrice.pricePerGram} ${latestPrice.currency} (${isUp ? '+' : ''}${latestPrice.percentageChange.toFixed(2)}%)`
+                  : `Gold price in ${goldAlert.country} is now ${latestPrice.pricePerGram} ${latestPrice.currency} (${isUp ? '+' : ''}${latestPrice.percentageChange.toFixed(2)}%)`;
+
+                if (lang === 'ar') {
+                  const catchphrase = this.getRandomMessage(isUp ? 'goldUp' : 'goldDown');
+                  body = `${catchphrase}\n${body}`;
+                }
+
                 await this.sendNotification(
                   alert.fcmToken,
-                  `Gold Price Alert - ${goldAlert.country}`,
-                  `Gold price in ${goldAlert.country} is now ${latestPrice.pricePerGram} ${latestPrice.currency} (${latestPrice.percentageChange > 0 ? '+' : ''}${latestPrice.percentageChange.toFixed(2)}%)`,
+                  title,
+                  body,
                   {
                     type: 'gold_price',
                     country: goldAlert.country,
@@ -151,7 +198,7 @@ class NotificationService {
                     currency: latestPrice.currency
                   }
                 );
-                
+
                 // Update last notified time
                 await this.markNotified(alert);
               } catch (error) {
@@ -171,20 +218,32 @@ class NotificationService {
             fromCurrency: currencyAlert.fromCurrency,
             toCurrency: currencyAlert.toCurrency
           }).sort({ timestamp: -1 });
-          
+
           if (latestRate && latestRate.rateChange !== 0) {
             const shouldAlert = this.checkThreshold(
               latestRate.rate,
               currencyAlert.threshold,
               currencyAlert.direction
             );
-            
+
             if (shouldAlert) {
               try {
+                const lang = alert.language === 'ar' ? 'ar' : 'en';
+                const isUp = latestRate.rateChange > 0;
+                const title = lang === 'ar' ? 'تنبيه سعر الصرف' : 'Exchange Rate Alert';
+                let body = lang === 'ar'
+                  ? `سعر ${currencyAlert.fromCurrency}/${currencyAlert.toCurrency} الآن ${latestRate.rate.toFixed(4)} (${isUp ? '+' : ''}${latestRate.percentageChange.toFixed(2)}%)`
+                  : `${currencyAlert.fromCurrency}/${currencyAlert.toCurrency} rate is now ${latestRate.rate.toFixed(4)} (${isUp ? '+' : ''}${latestRate.percentageChange.toFixed(2)}%)`;
+
+                if (lang === 'ar') {
+                  const catchphrase = this.getRandomMessage(isUp ? 'currUp' : 'currDown');
+                  body = `${catchphrase}\n${body}`;
+                }
+
                 await this.sendNotification(
                   alert.fcmToken,
-                  `Exchange Rate Alert`,
-                  `${currencyAlert.fromCurrency}/${currencyAlert.toCurrency} rate is now ${latestRate.rate.toFixed(4)} (${latestRate.percentageChange > 0 ? '+' : ''}${latestRate.percentageChange.toFixed(2)}%)`,
+                  title,
+                  body,
                   {
                     type: 'currency_rate',
                     from: currencyAlert.fromCurrency,
@@ -192,7 +251,7 @@ class NotificationService {
                     rate: latestRate.rate.toString()
                   }
                 );
-                
+
                 // Update last notified time
                 await this.markNotified(alert);
               } catch (error) {
@@ -202,7 +261,7 @@ class NotificationService {
           }
         }
       }
-      
+
     } catch (error) {
       console.error('❌ Error checking alerts:', error);
     }
@@ -245,12 +304,28 @@ class NotificationService {
         }
       }
 
-      const direction = priceDoc.priceChange > 0 ? 'increased' : 'decreased';
-      const title = `Gold price update - ${this.formatCountryName(country)}`;
+      const lang = alert.language === 'ar' ? 'ar' : 'en';
+      const directionPayload = priceDoc.priceChange > 0 ? 'increased' : 'decreased';
+      const directionStr = lang === 'ar'
+        ? (priceDoc.priceChange > 0 ? 'ارتفع' : 'انخفض')
+        : directionPayload;
+
+      const title = lang === 'ar'
+        ? `تحديث سعر الذهب - ${this.formatCountryName(country)}`
+        : `Gold price update - ${this.formatCountryName(country)}`;
+
       const change = this.formatNumber(Math.abs(priceDoc.priceChange), 2);
       const percentage = this.formatNumber(Math.abs(priceDoc.percentageChange), 2);
       const currentPrice = this.formatNumber(priceDoc.pricePerGram, 2);
-      const body = `Gold price ${direction} by ${change} ${priceDoc.currency} (${percentage}%) to ${currentPrice} ${priceDoc.currency}/g.`;
+
+      let body = lang === 'ar'
+        ? `سعر الذهب ${directionStr} بمقدار ${change} ${priceDoc.currency} (${percentage}%) إلى ${currentPrice} ${priceDoc.currency}/جرام.`
+        : `Gold price ${directionStr} by ${change} ${priceDoc.currency} (${percentage}%) to ${currentPrice} ${priceDoc.currency}/g.`;
+
+      if (lang === 'ar') {
+        const catchphrase = this.getRandomMessage(priceDoc.priceChange > 0 ? 'goldUp' : 'goldDown');
+        title = `${catchphrase} ${title}`;
+      }
 
       try {
         await this.sendNotification(alert.fcmToken, title, body, {
@@ -259,7 +334,7 @@ class NotificationService {
           price: priceDoc.pricePerGram.toString(),
           currency: priceDoc.currency,
           change: priceDoc.priceChange.toString(),
-          direction,
+          direction: directionPayload,
           percentageChange: priceDoc.percentageChange.toString()
         });
         await this.markNotified(alert);
@@ -312,12 +387,28 @@ class NotificationService {
         }
       }
 
-      const direction = rateDoc.rateChange > 0 ? 'strengthened' : 'weakened';
-      const title = `FX rate update - ${fromCurrency}/${toCurrency}`;
+      const lang = alert.language === 'ar' ? 'ar' : 'en';
+      const directionPayload = rateDoc.rateChange > 0 ? 'strengthened' : 'weakened';
+      const directionStr = lang === 'ar'
+        ? (rateDoc.rateChange > 0 ? 'ارتفع' : 'انخفض')
+        : directionPayload;
+
+      const title = lang === 'ar'
+        ? `تحديث أسعار الصرف - ${fromCurrency}/${toCurrency}`
+        : `FX rate update - ${fromCurrency}/${toCurrency}`;
+
       const change = this.formatNumber(Math.abs(rateDoc.rateChange), 4);
       const percentage = this.formatNumber(Math.abs(rateDoc.percentageChange), 2);
       const currentRate = this.formatNumber(rateDoc.rate, 4);
-      const body = `${fromCurrency}/${toCurrency} ${direction} by ${change} (${percentage}%) to ${currentRate}.`;
+
+      let body = lang === 'ar'
+        ? `${fromCurrency}/${toCurrency} ${directionStr} بمقدار ${change} (${percentage}%) إلى ${currentRate}.`
+        : `${fromCurrency}/${toCurrency} ${directionStr} by ${change} (${percentage}%) to ${currentRate}.`;
+
+      if (lang === 'ar') {
+        const catchphrase = this.getRandomMessage(rateDoc.rateChange > 0 ? 'currUp' : 'currDown');
+        title = `${catchphrase} ${title}`;
+      }
 
       try {
         await this.sendNotification(alert.fcmToken, title, body, {
@@ -326,7 +417,7 @@ class NotificationService {
           to: toCurrency,
           rate: rateDoc.rate.toString(),
           change: rateDoc.rateChange.toString(),
-          direction,
+          direction: directionPayload,
           percentageChange: rateDoc.percentageChange.toString()
         });
         await this.markNotified(alert);
@@ -349,22 +440,18 @@ class NotificationService {
         CurrencyRate.findOne({ fromCurrency: 'USD', toCurrency: 'EUR' }).sort({ timestamp: -1 })
       ]);
 
-      const goldSegment = latestGold
-        ? `Gold 24K ${this.formatNumber(latestGold.pricePerGram, 2)} ${latestGold.currency}/g (${latestGold.percentageChange > 0 ? '+' : ''}${this.formatNumber(latestGold.percentageChange || 0, 2)}%)`
-        : null;
+      const getGoldChangeStr = (doc) => `${doc.percentageChange > 0 ? '+' : ''}${this.formatNumber(doc.percentageChange || 0, 2)}%`;
+      const getCurrencyChangeStr = (doc) => `${doc.percentageChange > 0 ? '+' : ''}${this.formatNumber(doc.percentageChange || 0, 2)}%`;
 
-      const usdEgpSegment = latestUsdEgp
-        ? `USD/EGP ${this.formatNumber(latestUsdEgp.rate, 2)} (${latestUsdEgp.percentageChange > 0 ? '+' : ''}${this.formatNumber(latestUsdEgp.percentageChange || 0, 2)}%)`
-        : null;
+      // English parts
+      const enGoldSegment = latestGold ? `Gold 24K ${this.formatNumber(latestGold.pricePerGram, 2)} ${latestGold.currency}/g (${getGoldChangeStr(latestGold)})` : null;
+      const enUsdEgpSegment = latestUsdEgp ? `USD/EGP ${this.formatNumber(latestUsdEgp.rate, 2)} (${getCurrencyChangeStr(latestUsdEgp)})` : null;
+      const enUsdEurSegment = latestUsdEur ? `USD/EUR ${this.formatNumber(latestUsdEur.rate, 4)} (${getCurrencyChangeStr(latestUsdEur)})` : null;
 
-      const usdEurSegment = latestUsdEur
-        ? `USD/EUR ${this.formatNumber(latestUsdEur.rate, 4)} (${latestUsdEur.percentageChange > 0 ? '+' : ''}${this.formatNumber(latestUsdEur.percentageChange || 0, 2)}%)`
-        : null;
-
-      const parts = [goldSegment, usdEgpSegment, usdEurSegment].filter(Boolean);
-      const body = parts.length > 0
-        ? parts.join(' | ')
-        : 'Check the latest gold and currency updates.';
+      // Arabic parts
+      const arGoldSegment = latestGold ? `ذهب عيار 24: ${this.formatNumber(latestGold.pricePerGram, 2)} ${latestGold.currency}/جرام (${getGoldChangeStr(latestGold)})` : null;
+      const arUsdEgpSegment = latestUsdEgp ? `دولار/جنيه: ${this.formatNumber(latestUsdEgp.rate, 2)} (${getCurrencyChangeStr(latestUsdEgp)})` : null;
+      const arUsdEurSegment = latestUsdEur ? `دولار/يورو: ${this.formatNumber(latestUsdEur.rate, 4)} (${getCurrencyChangeStr(latestUsdEur)})` : null;
 
       const dataPayload = {
         type: 'daily_digest',
@@ -386,10 +473,24 @@ class NotificationService {
           continue;
         }
 
+        const lang = alert.language === 'ar' ? 'ar' : 'en';
+        let body;
+        let title;
+
+        if (lang === 'ar') {
+          const parts = [arGoldSegment, arUsdEgpSegment, arUsdEurSegment].filter(Boolean);
+          body = parts.length > 0 ? parts.join(' | ') : 'تحقق من أحدث أسعار الذهب والعملات.';
+          title = 'تحديث السوق اليومي';
+        } else {
+          const parts = [enGoldSegment, enUsdEgpSegment, enUsdEurSegment].filter(Boolean);
+          body = parts.length > 0 ? parts.join(' | ') : 'Check the latest gold and currency updates.';
+          title = 'Daily Market Update';
+        }
+
         try {
           await this.sendNotification(
             alert.fcmToken,
-            'Daily Market Update',
+            title,
             body,
             dataPayload
           );
