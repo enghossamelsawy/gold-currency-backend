@@ -21,13 +21,25 @@ class NotificationService {
         "الدهب ولع يا معلم! 🔥",
         "فرصة للبيع؟ الدهب رفع! 💰",
         "الدهب طار لفوق 🚀 الحق الظرف",
-        "يا تلحق يا متلحقش، الدهب بيزيد 📈"
+        "يا تلحق يا متلحقش، الدهب بيزيد 📈",
+        "الدهب بيلمع النهاردة! ✨ السعر زاد",
+        "أوبا! الدهب شد حيله قوي 💪",
+        "صباح الذهب! ☀️ السعر دلوقتي في العالي"
       ],
       goldDown: [
         "يا بلاش! الدهب نزل، دي فرصة تشتري 🛒",
         "الحق اشتري، الدهب ريح شوية 👇",
         "الدهب هدي، يمكن الوقت مناسب للشراء؟ 🤔",
-        "فرصة ذهبية! السعر نزل 📉"
+        "فرصة ذهبية! السعر نزل 📉",
+        "الدهب نازل يدلع 💃 فرصة للناس اللي عايزة تشتري",
+        "سعر الذهب هدي شوية، بص بصه كده 😉"
+      ],
+      goldGeneral: [
+        "تحديث سريع لأسعار الذهب 📝",
+        "شوف الذهب وصل لفين النهاردة 👀",
+        "يا صباح الرزق! ده سعر الذهب دلوقتي 💸",
+        "نشرة الذهب اليومية وصلت 📢",
+        "إيه الأخبار في سوق الذهب؟ 🕵️‍♂️"
       ],
       currUp: [
         "أوبا! العملة رفعت تاني 📈",
@@ -46,7 +58,17 @@ class NotificationService {
         "إيه الأخبار في السوق النهاردة؟ 🗞️",
         "يا صباح الرزق! شوف الأسعار دلوقت 💸",
         "يا هلا بالناس الحلوة، ده ملخص السوق 🍏",
-        "صباح الورد والياسمين، إليك أسعار اليوم 📝"
+        "صباح الورد والالماس، إليك أسعار اليوم 📝"
+      ]
+    };
+
+    this.englishMessages = {
+      goldGeneral: [
+        "Gold update incoming! ✨",
+        "Check today's gold rates! 💰",
+        "Fresh gold prices just in 📝",
+        "Is it time to buy? Check the rates! 🤔",
+        "Daily gold market overview 📊"
       ]
     };
   }
@@ -274,18 +296,25 @@ class NotificationService {
     }
   }
 
-  async notifyGoldPriceUpdate(priceDoc) {
+  getRandomEnglishMessage(category) {
+    const msgs = this.englishMessages[category];
+    if (!msgs) return "";
+    return msgs[Math.floor(Math.random() * msgs.length)];
+  }
+
+  async notifyGoldPriceUpdate(priceData) {
     if (!this.isFirebaseReady()) {
       return;
     }
 
-    if (!priceDoc || typeof priceDoc.priceChange !== 'number' || priceDoc.priceChange === 0) {
+    if (!priceData) {
       return;
     }
 
-    const country = priceDoc.country;
+    const country = priceData.country;
     const normalizedCountry = (country || '').toLowerCase();
     const regexCountry = country ? new RegExp(`^${this.escapeRegex(country)}$`, 'i') : null;
+
     const eligibleAlerts = await UserAlert.find({
       'notificationSettings.enabled': true,
       fcmToken: { $ne: null },
@@ -312,37 +341,28 @@ class NotificationService {
       }
 
       const lang = alert.language === 'ar' ? 'ar' : 'en';
-      const directionPayload = priceDoc.priceChange > 0 ? 'increased' : 'decreased';
-      const directionStr = lang === 'ar'
-        ? (priceDoc.priceChange > 0 ? 'ارتفع' : 'انخفض')
-        : directionPayload;
+      const currentPrice = this.formatNumber(priceData.pricePerGram, 2);
 
-      const title = lang === 'ar'
-        ? `تحديث سعر الذهب - ${this.formatCountryName(country)}`
-        : `Gold price update - ${this.formatCountryName(country)}`;
-
-      const change = this.formatNumber(Math.abs(priceDoc.priceChange), 2);
-      const percentage = this.formatNumber(Math.abs(priceDoc.percentageChange), 2);
-      const currentPrice = this.formatNumber(priceDoc.pricePerGram, 2);
-
-      let body = lang === 'ar'
-        ? `سعر الذهب ${directionStr} بمقدار ${change} ${priceDoc.currency} (${percentage}%) إلى ${currentPrice} ${priceDoc.currency}/جرام.`
-        : `Gold price ${directionStr} by ${change} ${priceDoc.currency} (${percentage}%) to ${currentPrice} ${priceDoc.currency}/g.`;
+      let title;
+      let body;
 
       if (lang === 'ar') {
-        const catchphrase = this.getRandomMessage(priceDoc.priceChange > 0 ? 'goldUp' : 'goldDown');
-        title = `${catchphrase} ${title}`;
+        const catchphrase = this.getRandomMessage('goldGeneral');
+        title = `✨ تحديث سعر الذهب - ${this.formatCountryName(country)}`;
+        body = `${catchphrase}\n\nسعر الذهب في ${this.formatCountryName(country)} هو الآن ${currentPrice} ${priceData.currency}/جرام 💰`;
+      } else {
+        const catchphrase = this.getRandomEnglishMessage('goldGeneral');
+        title = `✨ Gold Update - ${this.formatCountryName(country)}`;
+        body = `${catchphrase}\n\nThe gold price in ${this.formatCountryName(country)} is currently ${currentPrice} ${priceData.currency}/g 💰`;
       }
 
       try {
         await this.sendNotification(alert.fcmToken, title, body, {
           type: 'gold_price_update',
           country,
-          price: priceDoc.pricePerGram.toString(),
-          currency: priceDoc.currency,
-          change: priceDoc.priceChange.toString(),
-          direction: directionPayload,
-          percentageChange: priceDoc.percentageChange.toString()
+          price: priceData.pricePerGram.toString(),
+          currency: priceData.currency,
+          timestamp: priceData.timestamp || new Date().toISOString()
         });
         await this.markNotified(alert);
       } catch (error) {

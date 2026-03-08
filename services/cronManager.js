@@ -6,15 +6,14 @@ class CronManager {
   constructor() {
     this.jobs = [];
   }
-  
+
   start() {
     console.log('⏰ Starting cron jobs...');
-    
-    // Collect data every 15 minutes
-    const dataJob = cron.schedule('*/15 * * * *', async () => {
-      console.log('🔄 Running scheduled data collection...');
-      await dataCollector.collectAllData();
-      await notificationService.checkAndSendAlerts();
+
+    // Collect data 3 times a day (10:00, 16:00, 22:00 UTC)
+    const dataJob = cron.schedule('0 10,16,22 * * *', async () => {
+      console.log('🔄 Running scheduled gold price notification (3x daily)...');
+      await dataCollector.collectAndNotifyGoldOnly();
     });
 
     // Daily cleanup at midnight
@@ -37,7 +36,7 @@ class CronManager {
 
     console.log('✅ Cron jobs started successfully');
   }
-  
+
   stop() {
     console.log('⏹️ Stopping cron jobs...');
     this.jobs.forEach(job => job.stop());
